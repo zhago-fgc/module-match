@@ -250,7 +250,7 @@ function renderParticipants(i) {
     row.appendChild(fields);
 
     const chipField = document.createElement('div');
-    chipField.className = 'chip-field';
+    chipField.className = 'chip-field combobox';
     row.appendChild(chipField);
     renderParticipantChips(i, pIdx, chipField);
 
