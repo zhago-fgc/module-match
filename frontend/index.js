@@ -237,7 +237,11 @@ function renderParticipants(i) {
     remove.type = 'button';
     remove.className = 'btn btn-outline-danger btn-sm';
     remove.textContent = '×';
+    const canRemove = participants[i].length > playerRange().min;
+    remove.disabled = !canRemove;
+    remove.classList.toggle('hidden', !canRemove);
     remove.addEventListener('click', () => {
+      if (participants[i].length <= playerRange().min) return;
       participants[i].splice(pIdx, 1);
       renderParticipants(i);
     });
