@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Match — Cockpit</title>
+    <link rel="stylesheet" href="/assets/bootstrap.min.css" />
+    <link rel="stylesheet" href="/assets/cockpit.css" />
+    <link rel="stylesheet" href="index.css" />
+    <script src="/assets/theme.js"></script>
+    <script src="/assets/combobox.js"></script>
+  </head>
+  <body>
+    <div class="cockpit-page">
+      <h1>Match</h1>
+
+      <h2 class="mt-4">Preview</h2>
+      <div class="preview-frame mb-2">
+        <iframe id="overlay-preview"></iframe>
+      </div>
+      <h3>Embed</h3>
+      <div class="field-row mb-3">
+        <select id="skin-select" class="form-select">
+          <option value="">Default overlay</option>
+        </select>
+      </div>
+      <input
+        id="embed-url"
+        class="form-control font-monospace mb-4"
+        readonly
+        onclick="this.select()"
+      />
+
+      <h2>Edit</h2>
+      <form id="form">
+        <div class="field-row mb-3">
+          <select id="game-select" class="form-select">
+            <option value="">— no game (free-text team) —</option>
+          </select>
+        </div>
+        <div class="sides mb-3">
+          <fieldset>
+            <legend>Side 1</legend>
+            <div class="input-group mb-2" style="max-width: 140px">
+              <span class="input-group-text">Score</span>
+              <input id="side-0-score" class="form-control" type="number" min="0" value="0" />
+            </div>
+            <div class="field-label">Participants</div>
+            <div class="participant-list" id="side-0-participants"></div>
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm add-character hidden"
+              id="side-0-add-participant"
+            >
+              + Participant
+            </button>
+          </fieldset>
+          <fieldset>
+            <legend>Side 2</legend>
+            <div class="input-group mb-2" style="max-width: 140px">
+              <span class="input-group-text">Score</span>
+              <input id="side-1-score" class="form-control" type="number" min="0" value="0" />
+            </div>
+            <div class="field-label">Participants</div>
+            <div class="participant-list" id="side-1-participants"></div>
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm add-character hidden"
+              id="side-1-add-participant"
+            >
+              + Participant
+            </button>
+          </fieldset>
+        </div>
+        <div class="field-row mb-3">
+          <input id="round" class="form-control" placeholder="Round (e.g. Grand Finals)" />
+          <input
+            id="best-of"
+            class="form-control"
+            type="number"
+            min="1"
+            value="3"
+            placeholder="Bo"
+          />
+        </div>
+        <button type="submit" class="btn btn-primary">Update overlay</button>
+      </form>
+    </div>
+    <script src="index.js"></script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "match",
+  "version": "0.1.0",
+  "type": "module",
+  "entry": "index.ts",
+  "ui": {
+    "cockpit": "frontend/index.html"
+  },
+  "displayName": "Match"
+}

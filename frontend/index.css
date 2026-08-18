@@ -1,0 +1,76 @@
+/* Match-specific only — shared fieldset/sides/field-row/combobox styling
+   lives in /assets/cockpit.css. Colors reference Bootstrap's own CSS
+   variables so these still work under data-bs-theme="dark". */
+.add-character {
+  margin-bottom: 0.75rem;
+}
+
+/* One participant = one team + one player + their character(s), grouped
+   together — a cross-org duo (FLY's SonicFox + SHR's INZEM on one side)
+   needs each pairing kept explicit, not three parallel flat lists. */
+.participant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.participant-row {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 6px;
+  padding: 0.6rem;
+}
+.participant-fields {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.participant-team {
+  flex: 0 0 40%;
+}
+
+/* Character chip/tag combobox — GitHub-labels-style, replaces one <select>
+   row per character slot (bad UX past 2-3 characters, worse at 4+). Sits
+   inside a shared .combobox wrapper (see /assets/cockpit.css) for the
+   suggestions dropdown; the chip-box/chips themselves are match-only, since
+   this is the one cockpit picking several values into one field. */
+.chip-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 6px;
+  padding: 0.35rem;
+  min-height: 2.25rem;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--bs-secondary-bg);
+  border-radius: 999px;
+  padding: 0.2rem 0.3rem 0.2rem 0.65rem;
+  font-size: 0.85rem;
+}
+.chip-remove {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  color: inherit;
+}
+.chip-remove:hover {
+  background: var(--bs-border-color);
+}
+.chip-input {
+  flex: 1;
+  min-width: 6rem;
+  border: none;
+  outline: none;
+  padding: 0.2rem;
+  background: transparent;
+  color: inherit;
+}
