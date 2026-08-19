@@ -63,9 +63,11 @@ fetch('/api/modules')
       opt.textContent = m.name;
       gameSelect.appendChild(opt);
     }
+    if (modules.some((m) => m.name === 'countries')) loadCountries();
   });
 
 let gameData = null; // { characters, charactersPerSide, playersPerSide, ... } from the selected game module
+let countries = [];
 
 // No format list gating this — a game just declares how many characters (or
 // players) a side needs as a {min, max} range (2xko: characters fixed at 2,
@@ -97,12 +99,30 @@ function totalCharacters(i) {
   return participants[i].reduce((sum, p) => sum + p.characters.length, 0);
 }
 
+function countryLabel(code) {
+  const value = String(code || '').toLowerCase();
+  const country = countries.find(
+    (c) => c.code === value || c.id === value || c.iso?.toLowerCase() === value,
+  );
+  return country ? `${country.name} (${country.iso})` : code || '';
+}
+
+function normalizeCountry(value) {
+  const q = String(value || '')
+    .trim()
+    .toLowerCase();
+  const country = countries.find(
+    (c) => c.code === q || c.id === q || c.iso?.toLowerCase() === q || c.name.toLowerCase() === q,
+  );
+  return country?.code || q;
+}
+
 // charactersPerSide bounds the whole side, not each participant — after any
 // add/remove, every *other* participant's chip box on this side needs to
 // re-check its own atMax too, or a sibling's box goes stale (still shows
 // "Add character…" and accepts typing even though the side is already full).
 function refreshSiblingChips(i, skipPIdx) {
-  participantContainers[i].querySelectorAll('.combobox').forEach((chipField, pIdx) => {
+  participantContainers[i].querySelectorAll('.chip-field').forEach((chipField, pIdx) => {
     if (pIdx !== skipPIdx) renderParticipantChips(i, pIdx, chipField);
   });
 }
@@ -225,12 +245,36 @@ function renderParticipants(i) {
       p.team = teamInput.value;
     });
 
-    const playerInput = document.createElement('input');
-    playerInput.className = 'form-control form-control-sm';
-    playerInput.placeholder = 'Player tag';
-    playerInput.value = p.player;
-    playerInput.addEventListener('input', () => {
-      p.player = playerInput.value;
+    const countryField = document.createElement('div');
+    countryField.className = 'country-field combobox';
+
+    const countryInput = document.createElement('input');
+    countryInput.className = 'form-control form-control-sm';
+    countryInput.placeholder = 'Country';
+    countryInput.value = countryLabel(p.country);
+    countryInput.addEventListener('input', () => {
+      p.country = normalizeCountry(countryInput.value);
+    });
+
+    const countrySuggestions = document.createElement('ul');
+    countrySuggestions.className = 'combobox-suggestions hidden';
+    countryField.append(countryInput, countrySuggestions);
+
+    zhagoCombobox(countryInput, countrySuggestions, {
+      getCandidates: (q) =>
+        countries
+          .filter(
+            (c) =>
+              !q ||
+              c.name.toLowerCase().includes(q) ||
+              c.code.includes(q) ||
+              c.iso.toLowerCase().includes(q),
+          )
+          .map((c) => ({ label: c.name, meta: c.iso, code: c.code })),
+      onSelect: (c) => {
+        p.country = c.code;
+        countryInput.value = countryLabel(c.code);
+      },
     });
 
     const remove = document.createElement('button');
@@ -246,8 +290,22 @@ function renderParticipants(i) {
       renderParticipants(i);
     });
 
-    fields.append(teamInput, playerInput, remove);
+    fields.append(teamInput, countryField, remove);
     row.appendChild(fields);
+
+    const secondaryFields = document.createElement('div');
+    secondaryFields.className = 'participant-fields';
+
+    const playerInput = document.createElement('input');
+    playerInput.className = 'participant-player form-control form-control-sm';
+    playerInput.placeholder = 'Player tag';
+    playerInput.value = p.player;
+    playerInput.addEventListener('input', () => {
+      p.player = playerInput.value;
+    });
+
+    secondaryFields.append(playerInput);
+    row.appendChild(secondaryFields);
 
     const chipField = document.createElement('div');
     chipField.className = 'chip-field combobox';
@@ -265,9 +323,10 @@ function resetParticipants(i, values = []) {
     ? values.map((p) => ({
         team: p.team ?? '',
         player: p.player ?? '',
+        country: p.country ?? '',
         characters: p.characters ?? [],
       }))
-    : [{ team: '', player: '', characters: [] }];
+    : [{ team: '', player: '', country: '', characters: [] }];
   renderParticipants(i);
 }
 
@@ -284,7 +343,7 @@ gameSelect.addEventListener('change', () => {
 });
 for (const i of SIDES) {
   addParticipantButtons[i].addEventListener('click', () => {
-    participants[i].push({ team: '', player: '', characters: [] });
+    participants[i].push({ team: '', player: '', country: '', characters: [] });
     renderParticipants(i);
   });
 }
@@ -293,6 +352,15 @@ for (const i of SIDES) {
 // itself after the first message instead of staying open for updates that
 // will never come (see the 2xko/sf6/kofxv modules: get-current only, no
 // `update`).
+function loadCountries() {
+  const es = new EventSource('/api/bus/countries/stream');
+  es.onmessage = (e) => {
+    es.close();
+    countries = JSON.parse(e.data)?.countries || [];
+    SIDES.forEach((i) => renderParticipants(i));
+  };
+}
+
 function loadGame(name, onReady) {
   if (!name) {
     gameData = null;
@@ -311,7 +379,7 @@ function sideValues(i) {
   return {
     participants: participants[i]
       .filter((p) => p.player.trim())
-      .map((p) => ({ team: p.team, player: p.player, characters: p.characters })),
+      .map((p) => ({ team: p.team, player: p.player, country: p.country, characters: p.characters })),
   };
 }
 
