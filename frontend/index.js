@@ -245,25 +245,6 @@ function renderParticipants(i) {
       p.team = teamInput.value;
     });
 
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'btn btn-outline-danger btn-sm';
-    remove.textContent = '×';
-    const canRemove = participants[i].length > playerRange().min;
-    remove.disabled = !canRemove;
-    remove.classList.toggle('hidden', !canRemove);
-    remove.addEventListener('click', () => {
-      if (participants[i].length <= playerRange().min) return;
-      participants[i].splice(pIdx, 1);
-      renderParticipants(i);
-    });
-
-    fields.append(teamInput, remove);
-    row.appendChild(fields);
-
-    const secondaryFields = document.createElement('div');
-    secondaryFields.className = 'participant-fields';
-
     const countryField = document.createElement('div');
     countryField.className = 'country-field combobox';
 
@@ -296,6 +277,25 @@ function renderParticipants(i) {
       },
     });
 
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn btn-outline-danger btn-sm';
+    remove.textContent = '×';
+    const canRemove = participants[i].length > playerRange().min;
+    remove.disabled = !canRemove;
+    remove.classList.toggle('hidden', !canRemove);
+    remove.addEventListener('click', () => {
+      if (participants[i].length <= playerRange().min) return;
+      participants[i].splice(pIdx, 1);
+      renderParticipants(i);
+    });
+
+    fields.append(teamInput, countryField, remove);
+    row.appendChild(fields);
+
+    const secondaryFields = document.createElement('div');
+    secondaryFields.className = 'participant-fields';
+
     const playerInput = document.createElement('input');
     playerInput.className = 'participant-player form-control form-control-sm';
     playerInput.placeholder = 'Player tag';
@@ -304,7 +304,7 @@ function renderParticipants(i) {
       p.player = playerInput.value;
     });
 
-    secondaryFields.append(countryField, playerInput);
+    secondaryFields.append(playerInput);
     row.appendChild(secondaryFields);
 
     const chipField = document.createElement('div');
