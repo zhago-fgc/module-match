@@ -24,6 +24,7 @@ import type { ModuleContext } from '@zhago/types';
 interface Participant {
   player: string;
   team: string;
+  country: string;
   characters: string[];
 }
 

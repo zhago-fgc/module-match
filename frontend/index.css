@@ -25,7 +25,16 @@
   margin-bottom: 0.5rem;
 }
 .participant-team {
-  flex: 0 0 40%;
+  flex: 1 1 0;
+}
+.country-field {
+  flex: 0 0 36%;
+}
+.country-field input {
+  width: 100%;
+}
+.participant-player {
+  flex: 1 1 0;
 }
 
 /* Character chip/tag combobox — GitHub-labels-style, replaces one <select>
