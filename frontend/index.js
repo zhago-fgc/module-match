@@ -1,3 +1,15 @@
+import { loadCountries } from './countries.js';
+import {
+  participants,
+  setPlayersRoster,
+  findPlayerByName,
+  renderParticipants,
+  resetParticipants,
+  clampToRanges,
+  swapParticipants,
+  loadGame,
+} from './participants.js';
+
 // The embed URL never changes with the skin pick anymore — it's
 // /overlay/match (see server.ts), pasted into OBS/xSplit/vMix exactly once.
 // That route resolves whichever pack is live off the `match-overlay` bus
@@ -36,24 +48,35 @@ skinSelect.addEventListener('change', () => {
 // One connection for both match's own data and its skin state, tagged by
 // namespace — see GET /api/bus/stream in src/routes/bus.ts. `source.onmessage`
 // is assigned further down, once the functions it needs are in scope.
-const source = new EventSource('/api/bus/stream?ns=match,match-overlay');
+// players is unconditionally in this namespace list, same as casters'
+// caster-directory — if the module isn't installed, that namespace just
+// never sends anything and the roster stays empty (suggestions only, never
+// a hard requirement to type a player name).
+const source = new EventSource('/api/bus/stream?ns=match,match-overlay,players');
 
 const SIDES = [0, 1];
 
 const gameSelect = document.getElementById('game-select');
-const scoreInputs = SIDES.map((i) => document.getElementById('side-' + i + '-score'));
-const participantContainers = SIDES.map((i) =>
-  document.getElementById('side-' + i + '-participants'),
-);
-const addParticipantButtons = SIDES.map((i) =>
-  document.getElementById('side-' + i + '-add-participant'),
-);
+const scoreDisplays = SIDES.map((i) => document.getElementById('side-' + i + '-score'));
+const scoreUpButtons = SIDES.map((i) => document.getElementById('side-' + i + '-score-up'));
+const scoreDownButtons = SIDES.map((i) => document.getElementById('side-' + i + '-score-down'));
 const roundInput = document.getElementById('round');
 const bestOfInput = document.getElementById('best-of');
+const fromLosersInputs = SIDES.map((i) => document.getElementById('side-' + i + '-from-losers'));
+const swapBtn = document.getElementById('swap-sides');
+const clearBtn = document.getElementById('clear-match');
 
 // Match never imports a game module — it discovers installed ones through
 // the manifest registry (tags.includes('game')), same as any other module
 // consuming another's data only through the bus.
+//
+// This fetch races the SSE snapshot below — on a fresh page load there's no
+// guarantee /api/modules resolves before source.onmessage delivers the
+// live state. If the snapshot wins, `gameSelect.value = targetGame` silently
+// no-ops (there's no matching <option> yet) and the selection is lost. Null
+// means "no state received yet" (leave the select alone); '' means "state
+// arrived with no game selected" (a real value to apply).
+let pendingGame = null;
 fetch('/api/modules')
   .then((r) => r.json())
   .then((modules) => {
@@ -63,272 +86,19 @@ fetch('/api/modules')
       opt.textContent = m.name;
       gameSelect.appendChild(opt);
     }
-    if (modules.some((m) => m.name === 'countries')) loadCountries();
-  });
-
-let gameData = null; // { characters, charactersPerSide, playersPerSide, ... } from the selected game module
-let countries = [];
-
-// No format list gating this — a game just declares how many characters (or
-// players) a side needs as a {min, max} range (2xko: characters fixed at 2,
-// players 1-2 for solo/duo; sf6: both fixed at 1; kofxv: characters fixed at
-// 3, players fixed at 1), and the cockpit adds/removes slots within that
-// range instead of offering a menu of named shapes to pick between. A game
-// that doesn't declare a range at all is treated as fully freeform — {1,
-// Infinity} — rather than forcing every game author to opt in just to get
-// today's default behavior.
-function charRange() {
-  return gameData?.charactersPerSide ?? { min: 1, max: Infinity };
-}
-
-function playerRange() {
-  return gameData?.playersPerSide ?? { min: 1, max: Infinity };
-}
-
-// One participant = one team + one player + their character(s). A side is
-// participants[], not flat players[]/characters[] arrays, because a flat
-// pairing can't express a cross-org duo (2XKO: FLY's SonicFox on Senna +
-// SHR's INZEM on Teemo, one side, two different teams). `charactersPerSide`
-// bounds the SIDE's total across every participant, not each participant
-// individually — no game-specific split rule (e.g. "2XKO duo splits 1 each")
-// is enforced here; the TO assigns characters to whichever participant
-// actually plays them.
-const participants = SIDES.map(() => []);
-
-function totalCharacters(i) {
-  return participants[i].reduce((sum, p) => sum + p.characters.length, 0);
-}
-
-function countryLabel(code) {
-  const value = String(code || '').toLowerCase();
-  const country = countries.find(
-    (c) => c.code === value || c.id === value || c.iso?.toLowerCase() === value,
-  );
-  return country ? `${country.name} (${country.iso})` : code || '';
-}
-
-function normalizeCountry(value) {
-  const q = String(value || '')
-    .trim()
-    .toLowerCase();
-  const country = countries.find(
-    (c) => c.code === q || c.id === q || c.iso?.toLowerCase() === q || c.name.toLowerCase() === q,
-  );
-  return country?.code || q;
-}
-
-// charactersPerSide bounds the whole side, not each participant — after any
-// add/remove, every *other* participant's chip box on this side needs to
-// re-check its own atMax too, or a sibling's box goes stale (still shows
-// "Add character…" and accepts typing even though the side is already full).
-function refreshSiblingChips(i, skipPIdx) {
-  participantContainers[i].querySelectorAll('.chip-field').forEach((chipField, pIdx) => {
-    if (pIdx !== skipPIdx) renderParticipantChips(i, pIdx, chipField);
-  });
-}
-
-// Called after a game switch, before re-rendering — a duo's 2 participants
-// (or a side's characters) can be over the *new* game's limits if the
-// previous game allowed more.
-function clampToRanges(i) {
-  const pMax = playerRange().max;
-  if (participants[i].length > pMax) participants[i] = participants[i].slice(0, pMax);
-
-  let remaining = charRange().max;
-  for (const p of participants[i]) {
-    if (p.characters.length > remaining)
-      p.characters = p.characters.slice(0, Math.max(remaining, 0));
-    remaining -= p.characters.length;
-  }
-}
-
-// Character chip/tag combobox — GitHub-labels-style. One always-visible text
-// input per participant instead of a <select> per character slot, which
-// stopped scaling once a game needed 3-4 characters a side (Marvel Tokon).
-// Re-renders (only this participant's chip box, not the whole participant
-// list) on every change instead of diffing the DOM. The suggestions-list
-// wiring itself is the shared zhagoCombobox() (see /assets/combobox.js) —
-// this only owns what's chip-specific: multiple values, Enter-to-commit,
-// Backspace-to-remove-last.
-function renderParticipantChips(i, pIdx, container) {
-  const participant = participants[i][pIdx];
-  container.innerHTML = '';
-
-  const atMax = totalCharacters(i) >= charRange().max;
-
-  const box = document.createElement('div');
-  box.className = 'chip-box';
-
-  participant.characters.forEach((name, cIdx) => {
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.textContent = name;
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'chip-remove';
-    remove.textContent = '×';
-    remove.addEventListener('click', () => {
-      participant.characters.splice(cIdx, 1);
-      renderParticipantChips(i, pIdx, container);
-      refreshSiblingChips(i, pIdx);
-    });
-    chip.appendChild(remove);
-    box.appendChild(chip);
-  });
-
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'chip-input';
-  input.placeholder = atMax ? '' : 'Add character…';
-  input.disabled = atMax;
-  box.appendChild(input);
-  container.appendChild(box);
-
-  const suggestions = document.createElement('ul');
-  suggestions.className = 'combobox-suggestions hidden';
-  container.appendChild(suggestions);
-
-  function commit(name) {
-    if (!name || participant.characters.includes(name)) return;
-    if (totalCharacters(i) >= charRange().max) return;
-    participant.characters.push(name);
-    renderParticipantChips(i, pIdx, container);
-    container.querySelector('.chip-input')?.focus();
-    refreshSiblingChips(i, pIdx);
-  }
-
-  const combobox = zhagoCombobox(input, suggestions, {
-    getCandidates: (q) =>
-      (gameData?.characters ?? [])
-        .filter(
-          (c) =>
-            !participant.characters.includes(c.name) && (!q || c.name.toLowerCase().includes(q)),
-        )
-        .map((c) => ({ label: c.name, name: c.name })),
-    onSelect: (c) => commit(c.name),
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const q = input.value.trim();
-      const exact = (gameData?.characters ?? []).find(
-        (c) => c.name.toLowerCase() === q.toLowerCase(),
-      );
-      if (exact) commit(exact.name);
-    } else if (e.key === 'Backspace' && !input.value && participant.characters.length) {
-      participant.characters.pop();
-      renderParticipantChips(i, pIdx, container);
-      refreshSiblingChips(i, pIdx);
-    } else if (e.key === 'Escape') {
-      combobox.close();
+    if (pendingGame !== null) gameSelect.value = pendingGame;
+    if (modules.some((m) => m.name === 'countries')) {
+      loadCountries(() => SIDES.forEach((i) => renderParticipants(i)));
     }
   });
-}
 
-function renderParticipants(i) {
-  const container = participantContainers[i];
-  container.innerHTML = '';
-
-  participants[i].forEach((p, pIdx) => {
-    const row = document.createElement('div');
-    row.className = 'participant-row';
-
-    const fields = document.createElement('div');
-    fields.className = 'participant-fields';
-
-    const teamInput = document.createElement('input');
-    teamInput.className = 'participant-team form-control form-control-sm';
-    teamInput.placeholder = 'Team (optional, e.g. FlyQuest)';
-    teamInput.value = p.team;
-    teamInput.addEventListener('input', () => {
-      p.team = teamInput.value;
-    });
-
-    const countryField = document.createElement('div');
-    countryField.className = 'country-field combobox';
-
-    const countryInput = document.createElement('input');
-    countryInput.className = 'form-control form-control-sm';
-    countryInput.placeholder = 'Country';
-    countryInput.value = countryLabel(p.country);
-    countryInput.addEventListener('input', () => {
-      p.country = normalizeCountry(countryInput.value);
-    });
-
-    const countrySuggestions = document.createElement('ul');
-    countrySuggestions.className = 'combobox-suggestions hidden';
-    countryField.append(countryInput, countrySuggestions);
-
-    zhagoCombobox(countryInput, countrySuggestions, {
-      getCandidates: (q) =>
-        countries
-          .filter(
-            (c) =>
-              !q ||
-              c.name.toLowerCase().includes(q) ||
-              c.code.includes(q) ||
-              c.iso.toLowerCase().includes(q),
-          )
-          .map((c) => ({ label: c.name, meta: c.iso, code: c.code })),
-      onSelect: (c) => {
-        p.country = c.code;
-        countryInput.value = countryLabel(c.code);
-      },
-    });
-
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'btn btn-outline-danger btn-sm';
-    remove.textContent = '×';
-    const canRemove = participants[i].length > playerRange().min;
-    remove.disabled = !canRemove;
-    remove.classList.toggle('hidden', !canRemove);
-    remove.addEventListener('click', () => {
-      if (participants[i].length <= playerRange().min) return;
-      participants[i].splice(pIdx, 1);
-      renderParticipants(i);
-    });
-
-    fields.append(teamInput, countryField, remove);
-    row.appendChild(fields);
-
-    const secondaryFields = document.createElement('div');
-    secondaryFields.className = 'participant-fields';
-
-    const playerInput = document.createElement('input');
-    playerInput.className = 'participant-player form-control form-control-sm';
-    playerInput.placeholder = 'Player tag';
-    playerInput.value = p.player;
-    playerInput.addEventListener('input', () => {
-      p.player = playerInput.value;
-    });
-
-    secondaryFields.append(playerInput);
-    row.appendChild(secondaryFields);
-
-    const chipField = document.createElement('div');
-    chipField.className = 'chip-field combobox';
-    row.appendChild(chipField);
-    renderParticipantChips(i, pIdx, chipField);
-
-    container.appendChild(row);
-  });
-
-  addParticipantButtons[i].classList.toggle('hidden', participants[i].length >= playerRange().max);
-}
-
-function resetParticipants(i, values = []) {
-  participants[i] = values.length
-    ? values.map((p) => ({
-        team: p.team ?? '',
-        player: p.player ?? '',
-        country: p.country ?? '',
-        characters: p.characters ?? [],
-      }))
-    : [{ team: '', player: '', country: '', characters: [] }];
-  renderParticipants(i);
-}
+// Live-managed fields not represented by any form control — score's own
+// per-game log and the declared winner. Tracked here so "Update overlay"
+// can echo them straight through instead of `set`'s full-object reset
+// silently wiping them (they're not part of the staged form, so they'd
+// otherwise fall back to `empty`'s defaults on every submit).
+let liveWinner = null;
+let liveGames = [];
 
 gameSelect.addEventListener('change', () => {
   // Re-render both sides once the new game's ranges load — otherwise the
@@ -341,65 +111,158 @@ gameSelect.addEventListener('change', () => {
     });
   });
 });
-for (const i of SIDES) {
-  addParticipantButtons[i].addEventListener('click', () => {
-    participants[i].push({ team: '', player: '', country: '', characters: [] });
-    renderParticipants(i);
-  });
-}
-
-// Static reference content — one snapshot is enough, so the stream closes
-// itself after the first message instead of staying open for updates that
-// will never come (see the 2xko/sf6/kofxv modules: get-current only, no
-// `update`).
-function loadCountries() {
-  const es = new EventSource('/api/bus/countries/stream');
-  es.onmessage = (e) => {
-    es.close();
-    countries = JSON.parse(e.data)?.countries || [];
-    SIDES.forEach((i) => renderParticipants(i));
-  };
-}
-
-function loadGame(name, onReady) {
-  if (!name) {
-    gameData = null;
-    onReady?.();
-    return;
-  }
-  const es = new EventSource('/api/bus/' + name + '/stream');
-  es.onmessage = (e) => {
-    es.close();
-    gameData = JSON.parse(e.data) || { characters: [] };
-    onReady?.();
-  };
-}
 
 function sideValues(i) {
   return {
+    fromLosers: fromLosersInputs[i].checked,
     participants: participants[i]
       .filter((p) => p.player.trim())
       .map((p) => ({ team: p.team, player: p.player, country: p.country, characters: p.characters })),
   };
 }
 
-document.getElementById('form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const payload = {
+// Toggle, not two separate actions — clicking the already-declared winner's
+// button again unsets it (see the "Click again to unset" title), rather
+// than needing a second dedicated button to find and click.
+const winnerButtons = SIDES.map((i) => document.getElementById('side-' + i + '-winner'));
+winnerButtons.forEach((btn, i) => {
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('active')) {
+      fetch('/api/bus/match/unset-winner', { method: 'POST' });
+      return;
+    }
+    fetch('/api/bus/match/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ winner: 'side-' + (i + 1) }),
+    });
+  });
+});
+
+// Immediate, not staged — same reasoning as the winner buttons. "+" logs a
+// game win (snapshotting whichever characters are currently typed in) and
+// bumps score; "-" undoes that side's most recent recorded game. Winner
+// declaration stays a separate, manual step (see winnerButtons above) —
+// this only tracks the running per-game log, never auto-completes the match.
+scoreUpButtons.forEach((btn, i) => {
+  btn.addEventListener('click', async () => {
+    await publishForm(); // lock in whatever's currently typed before logging the game
+    fetch('/api/bus/match/record-game', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ winner: 'side-' + (i + 1) }),
+    });
+  });
+});
+scoreDownButtons.forEach((btn, i) => {
+  btn.addEventListener('click', async () => {
+    await publishForm();
+    fetch('/api/bus/match/undo-game', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ side: 'side-' + (i + 1) }),
+    });
+  });
+});
+
+// Local/unsaved-form-only — swaps what's currently typed in, same as any
+// other field edit. Doesn't touch the live match until "Update overlay" is
+// submitted, and doesn't touch an already-declared winner (that's live
+// state, corrected separately by clicking that side's winner button again).
+// The recorded game log's side references get flipped too — "side-1 won
+// G2" means "whoever's in the side-1 slot," and swap changes who that is.
+const otherSide = { 'side-1': 'side-2', 'side-2': 'side-1' };
+swapBtn.addEventListener('click', () => {
+  swapParticipants();
+  [scoreDisplays[0].textContent, scoreDisplays[1].textContent] = [
+    scoreDisplays[1].textContent,
+    scoreDisplays[0].textContent,
+  ];
+  [fromLosersInputs[0].checked, fromLosersInputs[1].checked] = [
+    fromLosersInputs[1].checked,
+    fromLosersInputs[0].checked,
+  ];
+  if (liveWinner) liveWinner = otherSide[liveWinner];
+  liveGames = liveGames.map((g) => ({
+    winner: otherSide[g.winner],
+    characters: { 'side-1': g.characters['side-2'] ?? [], 'side-2': g.characters['side-1'] ?? [] },
+  }));
+});
+
+// Immediate, not staged — publishes an empty match right away (same shape
+// `set` always resets to), rather than only clearing the form and leaving
+// the previous match live on the overlay until "Update overlay" is clicked.
+clearBtn.addEventListener('click', () => {
+  fetch('/api/bus/match/set', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+});
+
+// A player typed here that isn't already in the roster gets saved there too
+// — same "don't fill the same form twice" reasoning as casters' commentator
+// picker saving new names to caster-directory. Tracked across calls (not
+// just within one) because publishForm() below now runs on every +/- click,
+// not just "Update overlay" — without this, a name typed in but not yet
+// echoed back by players' own SSE update could get a duplicate roster entry
+// created on a second quick click before that roster refresh lands.
+const attemptedPlayerNames = new Set();
+async function saveNewPlayers() {
+  const creates = SIDES.flatMap((i) => participants[i])
+    .filter((p) => {
+      const name = p.player.trim();
+      if (!name || findPlayerByName(name) || attemptedPlayerNames.has(name.toLowerCase())) return false;
+      attemptedPlayerNames.add(name.toLowerCase());
+      return true;
+    })
+    .map((p) =>
+      fetch('/api/bus/players/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: p.player.trim(), team: p.team || undefined, country: p.country || undefined }),
+      }),
+    );
+  await Promise.all(creates);
+}
+
+function buildPayload() {
+  return {
     game: gameSelect.value,
     round: roundInput.value,
     bestOf: Number(bestOfInput.value),
+    // Echoed straight through, not read from any form control — see the
+    // liveWinner/liveGames declaration for why `set`'s reset would otherwise
+    // wipe them.
+    winner: liveWinner,
+    games: liveGames,
     sides: SIDES.map((i) => ({
       id: 'side-' + (i + 1),
-      score: Number(scoreInputs[i].value),
+      score: Number(scoreDisplays[i].textContent),
       ...sideValues(i),
     })),
   };
+}
+
+// Publishes whatever's currently in the form — shared by "Update overlay"
+// and the score buttons above. The score buttons need this because
+// record-game/undo-game read the *server's* current participants for the
+// character snapshot; without publishing first, a name typed in but never
+// submitted stays invisible to the server, and the match:update the score
+// action triggers would echo that stale (or empty) server state straight
+// back over this browser's own form.
+async function publishForm() {
+  await saveNewPlayers();
   await fetch('/api/bus/match/set', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(buildPayload()),
   });
+}
+
+document.getElementById('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await publishForm();
 });
 
 source.onmessage = (e) => {
@@ -410,15 +273,27 @@ source.onmessage = (e) => {
     return;
   }
 
+  if (msg.ns === 'players') {
+    setPlayersRoster(msg.data || []);
+    return;
+  }
+
   const state = msg.data;
   roundInput.value = state.round ?? '';
   bestOfInput.value = state.bestOf ?? 0;
+  liveWinner = state.winner ?? null;
+  liveGames = state.games ?? [];
   SIDES.forEach((i) => {
     const side = state.sides?.[i];
-    scoreInputs[i].value = side?.score ?? 0;
+    scoreDisplays[i].textContent = side?.score ?? 0;
+    fromLosersInputs[i].checked = !!side?.fromLosers;
+    const isWinner = side && state.winner === side.id;
+    winnerButtons[i].classList.toggle('active', !!isWinner);
+    winnerButtons[i].textContent = isWinner ? 'Winner' : 'Declare winner';
   });
 
   const targetGame = state.game || '';
+  pendingGame = targetGame;
   if (gameSelect.value !== targetGame) gameSelect.value = targetGame;
   loadGame(targetGame, () => {
     SIDES.forEach((i) => {

@@ -4,6 +4,35 @@
 .add-character {
   margin-bottom: 0.75rem;
 }
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.score-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.score-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  min-width: 1.5rem;
+  text-align: center;
+}
+.winner-btn.active {
+  background: var(--bs-success);
+  color: #fff;
+}
+.from-losers-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+  cursor: pointer;
+}
 
 /* One participant = one team + one player + their character(s), grouped
    together — a cross-org duo (FLY's SonicFox + SHR's INZEM on one side)
@@ -35,6 +64,17 @@
 }
 .participant-player {
   flex: 1 1 0;
+}
+/* Wrapper around the player-tag combobox — .participant-player's own
+   flex:1 1 0 only applies while it's a direct flex child of
+   .participant-fields, so wrapping it in a combobox div (needed for the
+   suggestions dropdown) means the wrapper needs the same flex value, same
+   fix as .country-field below. */
+.player-field {
+  flex: 1 1 0;
+}
+.player-field input {
+  width: 100%;
 }
 
 /* Character chip/tag combobox — GitHub-labels-style, replaces one <select>
