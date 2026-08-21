@@ -134,10 +134,11 @@
 
 /* Same breakpoint as cockpit.css's own narrow-pane rule, which stretches
    every .btn to width:100% — fine for a lone submit button, but it would
-   blow up the compact "- 0 +" stepper into three full-width rows. Override
-   just the stepper's buttons back to their natural size, keep the stepper +
-   winner button together on one row, and push "Loser" to its own line. */
+   blow up the compact "- 0 + [Declare winner] [] Loser" row into several
+   full-width rows. Override every piece back to its natural, minimal size
+   so the whole row stays together instead of wrapping or stretching. */
 @media (max-width: 640px) {
+  .score-row,
   .score-actions {
     flex-wrap: nowrap;
   }
@@ -149,9 +150,10 @@
   }
   .winner-btn {
     width: auto;
-    flex: 1 1 auto;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   .from-losers-label {
-    flex-basis: 100%;
+    flex-shrink: 0;
   }
 }
