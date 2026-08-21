@@ -44,23 +44,25 @@
           <fieldset>
             <legend>Side 1</legend>
             <div class="score-row mb-2">
-              <div class="score-stepper">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="side-0-score-down">
-                  −
-                </button>
-                <span class="score-value" id="side-0-score">0</span>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="side-0-score-up">
-                  +
+              <div class="score-actions">
+                <div class="score-stepper">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="side-0-score-down">
+                    −
+                  </button>
+                  <span class="score-value" id="side-0-score">0</span>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="side-0-score-up">
+                    +
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-outline-success btn-sm winner-btn"
+                  id="side-0-winner"
+                  title="Click again to unset"
+                >
+                  Declare winner
                 </button>
               </div>
-              <button
-                type="button"
-                class="btn btn-outline-success btn-sm winner-btn"
-                id="side-0-winner"
-                title="Click again to unset"
-              >
-                Declare winner
-              </button>
               <label class="from-losers-label">
                 <input type="checkbox" id="side-0-from-losers" />
                 Loser
@@ -79,23 +81,25 @@
           <fieldset>
             <legend>Side 2</legend>
             <div class="score-row mb-2">
-              <div class="score-stepper">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="side-1-score-down">
-                  −
-                </button>
-                <span class="score-value" id="side-1-score">0</span>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="side-1-score-up">
-                  +
+              <div class="score-actions">
+                <div class="score-stepper">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="side-1-score-down">
+                    −
+                  </button>
+                  <span class="score-value" id="side-1-score">0</span>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="side-1-score-up">
+                    +
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-outline-success btn-sm winner-btn"
+                  id="side-1-winner"
+                  title="Click again to unset"
+                >
+                  Declare winner
                 </button>
               </div>
-              <button
-                type="button"
-                class="btn btn-outline-success btn-sm winner-btn"
-                id="side-1-winner"
-                title="Click again to unset"
-              >
-                Declare winner
-              </button>
               <label class="from-losers-label">
                 <input type="checkbox" id="side-1-from-losers" />
                 Loser

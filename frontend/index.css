@@ -10,6 +10,14 @@
   gap: 0.6rem;
   flex-wrap: wrap;
 }
+/* Groups the stepper + winner button as one flex item so they wrap together
+   at narrow widths instead of flex-wrap breaking them apart unpredictably —
+   "Loser" is the only thing meant to drop to its own line there. */
+.score-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
 .score-stepper {
   display: flex;
   align-items: center;
@@ -122,4 +130,28 @@
   padding: 0.2rem;
   background: transparent;
   color: inherit;
+}
+
+/* Same breakpoint as cockpit.css's own narrow-pane rule, which stretches
+   every .btn to width:100% — fine for a lone submit button, but it would
+   blow up the compact "- 0 +" stepper into three full-width rows. Override
+   just the stepper's buttons back to their natural size, keep the stepper +
+   winner button together on one row, and push "Loser" to its own line. */
+@media (max-width: 640px) {
+  .score-actions {
+    flex-wrap: nowrap;
+  }
+  .score-stepper {
+    flex-shrink: 0;
+  }
+  .score-stepper button {
+    width: auto;
+  }
+  .winner-btn {
+    width: auto;
+    flex: 1 1 auto;
+  }
+  .from-losers-label {
+    flex-basis: 100%;
+  }
 }
